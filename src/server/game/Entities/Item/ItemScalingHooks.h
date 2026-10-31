@@ -17,6 +17,7 @@
 
 class ByteBuffer;
 class Item;
+class Player;
 struct ItemTemplate;
 
 namespace ItemScalingHooks
@@ -29,8 +30,12 @@ namespace ItemScalingHooks
     using UpgradeHotfixListFn = void(*)(std::vector<std::pair<uint32, uint32>>& rows);
     // Writes one requested ItemUpgrade row; false = not a module row (no reply).
     using UpgradeRowWriterFn = bool(*)(uint32 upgradeId, ByteBuffer& record, uint32& timestamp);
+    // What an item would become if this player looted it now (for decisions such as bots'
+    // loot rolls); nullptr = it would stay as it is.
+    using LootPreviewFn = ItemTemplate const*(*)(Player* player, ItemTemplate const* proto);
 
     inline std::atomic<StatTemplateFn> StatTemplate{ nullptr };
+    inline std::atomic<LootPreviewFn> LootPreview{ nullptr };
     inline std::atomic<ItemLoadedFn> ItemLoaded{ nullptr };
     inline std::atomic<UpgradeHotfixListFn> UpgradeHotfixList{ nullptr };
     inline std::atomic<UpgradeRowWriterFn> UpgradeRowWriter{ nullptr };
