@@ -2495,3 +2495,16 @@ uint32 Player::GetQuestObjectiveCounter(uint32 objectiveId) const
 
     return 0;
 }
+
+void Player::RefreshQuestLogQueries()
+{
+    for (auto const& itr : m_QuestStatus)
+    {
+        QuestStatus const status = itr.second.Status;
+        if (status != QUEST_STATUS_INCOMPLETE && status != QUEST_STATUS_COMPLETE && status != QUEST_STATUS_FAILED)
+            continue;
+
+        if (Quest const* quest = sObjectMgr->GetQuestTemplate(itr.first))
+            PlayerTalkClass->SendQuestQueryResponse(quest);
+    }
+}

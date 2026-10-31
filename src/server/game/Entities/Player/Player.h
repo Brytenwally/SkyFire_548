@@ -1843,6 +1843,9 @@ public:
     bool HasQuestForItem(uint32 itemId) const;
     bool HasQuestForGO(int32 goId) const;
     void UpdateForQuestWorldObjects();
+    // Re-sends the query response of every quest in the log, so the client replaces the
+    // quest levels it cached (open world scaling changes them per character).
+    void RefreshQuestLogQueries();
     bool CanShareQuest(uint32 questId) const;
     void QuestObjectiveSatisfy(uint32 objectId, uint32 amount, uint8 type = 0u, uint64 guid = 0u);
 

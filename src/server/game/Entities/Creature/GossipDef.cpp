@@ -717,7 +717,9 @@ void PlayerMenu::SendQuestQueryResponse(Quest const* quest) const
     data << int32(quest->GetMinLevel());                                    // min level
     data << uint32(quest->GetRewardReputationMask());                       // rep mask (unsure on what it does)
     data << uint32(quest->GetPointOpt());
-    data << int32(quest->GetQuestLevel());                                  // may be -1, static data, in other cases must be used dynamic level: Player::GetQuestLevel (0 is not known, but assuming this is no longer valid for quest intended for client)
+    // may be -1 (the player's level). Open world scaling sends each character the level the quest
+    // plays at for them; Player::RefreshQuestLogQueries re-sends it when that changes.
+    data << int32(quest->GetQuestLevelFor(_session->GetPlayer()));
     data << uint32(quest->GetQuestMethod());                                // 0 = complete-on-accept (Method), 1 unused, 2 = normal
     data << uint32(quest->RequiredSourceItemCount[2]);
     data << uint32(quest->GetXPId());                                       // seems to always have the same value as the first XP ID field
