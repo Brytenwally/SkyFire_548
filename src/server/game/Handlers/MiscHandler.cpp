@@ -2647,13 +2647,15 @@ void WorldSession::HandleRequestHotfix(WorldPacket& recvPacket)
     if (type == DB2_REPLY_ITEM_UPGRADE)
     {
         // Synthetic item level shift rows (ItemLevelShift.h); SkyFire has no ItemUpgrade store.
+        // Blizzard's own rows are left alone (an empty reply would erase them client-side).
+        SF_LOG_INFO("network", "CMSG_REQUEST_HOTFIX: client asked for %u ItemUpgrade row(s), first %u",
+            count, count ? entries[0] : 0);
+        uint32 sent = 0;
         for (uint32 i = 0; i < count; ++i)
         {
             if (!ItemLevelShift::IsShiftUpgradeId(entries[i]))
-            {
-                SendEmptyDbReply(this, entries[i], type, "not an item level shift row");
                 continue;
-            }
+            ++sent;
 
             ByteBuffer record;
             ItemLevelShift::WriteUpgradeRecord(entries[i], record);
@@ -2666,6 +2668,7 @@ void WorldSession::HandleRequestHotfix(WorldPacket& recvPacket)
             data.append(record);
             SendPacket(&data);
         }
+        SF_LOG_INFO("network", "SMSG_DB_REPLY: sent %u item level shift ItemUpgrade row(s)", sent);
         return;
     }
 

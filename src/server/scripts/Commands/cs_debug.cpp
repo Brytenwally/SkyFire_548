@@ -1519,6 +1519,34 @@ public:
         }
 
         uint8 const slot = uint8(atoi(slotArg));
+
+        // .debug itemlevel <slot> raw <upgrade id> [mask]: stamps any upgrade id (for example
+        // one of Blizzard's own ItemUpgrade.db2 rows) without touching the server's stats, to
+        // see whether the client tooltip reacts to the modifier at all.
+        if (!strcmp(shiftArg, "raw"))
+        {
+            char* idArg = strtok(NULL, " ");
+            char* maskArg = strtok(NULL, " ");
+            Item* rawItem = slot < EQUIPMENT_SLOT_END ? player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot) : NULL;
+            if (!idArg || !rawItem)
+            {
+                handler->SendSysMessage("Usage: .debug itemlevel <equipped slot> raw <upgrade id> [modifier mask bits, default 4]");
+                handler->SetSentErrorMessage(true);
+                return false;
+            }
+            uint32 const upgradeId = uint32(strtoul(idArg, NULL, 10));
+            uint32 const mask = maskArg ? uint32(strtoul(maskArg, NULL, 10)) : 4u;
+            rawItem->SetDynamicUInt32Value(ITEM_DYNAMIC_MODIFIERS, 2, upgradeId);
+            if (upgradeId)
+                rawItem->SetFlag(ITEM_FIELD_MODIFIERS_MASK, mask);
+            else
+                rawItem->RemoveFlag(ITEM_FIELD_MODIFIERS_MASK, mask);
+            rawItem->SetState(ITEM_CHANGED, player);
+            handler->PSendSysMessage("%s: upgrade modifier = %u, modifiers mask now %u. Server stats unchanged.",
+                rawItem->GetTemplate()->Name1.c_str(), upgradeId, rawItem->GetUInt32Value(ITEM_FIELD_MODIFIERS_MASK));
+            return true;
+        }
+
         int32 const shift = atoi(shiftArg);
         Item* item = slot < EQUIPMENT_SLOT_END ? player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot) : NULL;
         if (!item)
