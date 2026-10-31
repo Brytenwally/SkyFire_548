@@ -16,6 +16,7 @@
 #include "DBCStores.h"
 #include "Group.h"
 #include "Guild.h"
+#include "ItemLevelShift.h"
 #include "GuildMgr.h"
 #include "Language.h"
 #include "LFGMgr.h"
@@ -1634,8 +1635,11 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder* holder)
 
     HotfixData const& hotfix = sObjectMgr->GetHotfixData();
 
+    // Plus the synthetic ItemUpgrade rows item level shifts use (ItemLevelShift.h).
+    uint32 const shiftRows = uint32(ItemLevelShift::HOTFIX_MAX_SHIFT - ItemLevelShift::HOTFIX_MIN_SHIFT + 1) - 1;
+
     data.Initialize(SMSG_HOTFIX_NOTIFY_BLOB);
-    data.WriteBits(hotfix.size(), 20);
+    data.WriteBits(hotfix.size() + shiftRows, 20);
     data.FlushBits();
 
     for (uint32 i = 0; i < hotfix.size(); ++i)
@@ -1643,6 +1647,15 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder* holder)
         data << uint32(hotfix[i].Timestamp);
         data << uint32(hotfix[i].Entry);
         data << uint32(hotfix[i].Type);
+    }
+
+    for (int32 shift = ItemLevelShift::HOTFIX_MIN_SHIFT; shift <= ItemLevelShift::HOTFIX_MAX_SHIFT; ++shift)
+    {
+        if (!shift)
+            continue;
+        data << uint32(ItemLevelShift::HOTFIX_TIMESTAMP);
+        data << uint32(ItemLevelShift::UpgradeIdFor(shift));
+        data << uint32(DB2_REPLY_ITEM_UPGRADE);
     }
 
     SendPacket(&data);

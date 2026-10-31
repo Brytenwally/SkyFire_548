@@ -285,6 +285,12 @@ public:
     void SetEnchantmentCharges(EnchantmentSlot slot, uint32 charges);
     void ClearEnchantment(EnchantmentSlot slot);
     uint32 GetEnchantmentId(EnchantmentSlot slot)       const { return GetUInt32Value(ITEM_FIELD_ENCHANTMENT + slot * MAX_ENCHANTMENT_OFFSET + ENCHANTMENT_ID_OFFSET); }
+
+    // Item level shift carried by the upgrade modifier (ItemLevelShift.h). The stat
+    // template is the item's template at its shifted item level.
+    int32 GetItemLevelShift() const;
+    void SetItemLevelShift(int32 shift);
+    ItemTemplate const* GetStatTemplate() const;
     uint32 GetEnchantmentDuration(EnchantmentSlot slot) const { return GetUInt32Value(ITEM_FIELD_ENCHANTMENT + slot * MAX_ENCHANTMENT_OFFSET + ENCHANTMENT_DURATION_OFFSET); }
     uint32 GetEnchantmentCharges(EnchantmentSlot slot)  const { return GetUInt32Value(ITEM_FIELD_ENCHANTMENT + slot * MAX_ENCHANTMENT_OFFSET + ENCHANTMENT_CHARGES_OFFSET); }
 

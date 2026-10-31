@@ -97,6 +97,7 @@ public:
             { "moveflags",     rbac::RBAC_PERM_COMMAND_DEBUG_MOVEFLAGS,     false, &HandleDebugMoveflagsCommand,        "", },
             { "rest",          rbac::RBAC_PERM_COMMAND_DEBUG_REST,          false, &HandleDebugRestCommand,             "", },
             { "transport",     rbac::RBAC_PERM_COMMAND_DEBUG_TRANSPORT,     false, &HandleDebugTransportCommand,        "", },
+            { "itemlevel",     rbac::RBAC_PERM_COMMAND_DEBUG,               false, &HandleDebugItemLevelCommand,        "", },
         };
         static std::vector<ChatCommand> commandTable =
         {
@@ -1495,6 +1496,56 @@ public:
         SF_LOG_INFO("sql.dev", "(@PATH, XX, %.3f, %.3f, %.5f, 0, 0, 0, 100, 0),", player->GetPositionX(), player->GetPositionY(), player->GetPositionZ());
 
         handler->PSendSysMessage("Waypoint SQL written to SQL Developer log");
+        return true;
+    }
+
+    // .debug itemlevel <equipment slot 0-18> <shift>: shifts the item level of an equipped
+    // item through its upgrade modifier (ItemLevelShift.h), to test how the client shows it.
+    // Not saved with the item. Slots: 0 head, 1 neck, 2 shoulders, 4 chest, 5 waist, 6 legs,
+    // 7 feet, 8 wrists, 9 hands, 10-11 rings, 12-13 trinkets, 14 back, 15 main hand, 16 off hand.
+    static bool HandleDebugItemLevelCommand(ChatHandler* handler, char const* args)
+    {
+        Player* player = handler->getSelectedPlayer();
+        if (!player)
+            player = handler->GetSession()->GetPlayer();
+
+        char* slotArg = strtok((char*)args, " ");
+        char* shiftArg = strtok(NULL, " ");
+        if (!slotArg || !shiftArg)
+        {
+            handler->SendSysMessage("Usage: .debug itemlevel <equipment slot 0-18> <item level shift, e.g. 50 or -20>");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        uint8 const slot = uint8(atoi(slotArg));
+        int32 const shift = atoi(shiftArg);
+        Item* item = slot < EQUIPMENT_SLOT_END ? player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot) : NULL;
+        if (!item)
+        {
+            handler->PSendSysMessage("No item in equipment slot %u.", uint32(slot));
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        ItemTemplate const* proto = item->GetTemplate();
+        bool const applied = !item->IsBroken();
+        if (applied)
+            player->_ApplyItemMods(item, slot, false);
+        item->SetItemLevelShift(shift);
+        if (applied)
+            player->_ApplyItemMods(item, slot, true);
+
+        ItemTemplate const* shifted = item->GetStatTemplate();
+        handler->PSendSysMessage("%s (entry %u): item level %u -> %u (shift %d, upgrade id %u), armor %u -> %u, damage %.0f-%.0f -> %.0f-%.0f.",
+            proto->Name1.c_str(), proto->ItemId, proto->ItemLevel, shifted->ItemLevel, item->GetItemLevelShift(),
+            item->GetDynamicUInt32Value(ITEM_DYNAMIC_MODIFIERS, 2), proto->GetArmor(), shifted->GetArmor(),
+            proto->DamageMin, proto->DamageMax, shifted->DamageMin, shifted->DamageMax);
+        for (uint8 i = 0; i < MAX_ITEM_PROTO_STATS; ++i)
+            if (proto->ItemStat[i].ItemStatValue)
+                handler->PSendSysMessage("  stat %u: %d -> %d", proto->ItemStat[i].ItemStatType,
+                    proto->ItemStat[i].ItemStatValue, shifted->ItemStat[i].ItemStatValue);
+        handler->SendSysMessage("Compare the tooltip with these numbers and the character sheet. The shift is lost at logout.");
         return true;
     }
 

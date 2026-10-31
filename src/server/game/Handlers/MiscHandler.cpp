@@ -25,6 +25,7 @@
 #include "GuildMgr.h"
 #include "InstanceScript.h"
 #include "Language.h"
+#include "ItemLevelShift.h"
 #include "Log.h"
 #include "LootMgr.h"
 #include "MapManager.h"
@@ -2641,6 +2642,31 @@ void WorldSession::HandleRequestHotfix(WorldPacket& recvPacket)
         recvPacket.ReadByteSeq(guids[i][1]);
         recvPacket >> entries[i];
         recvPacket.ReadGuidBytes(guids[i], 0, 5, 6, 4, 7, 2, 3);
+    }
+
+    if (type == DB2_REPLY_ITEM_UPGRADE)
+    {
+        // Synthetic item level shift rows (ItemLevelShift.h); SkyFire has no ItemUpgrade store.
+        for (uint32 i = 0; i < count; ++i)
+        {
+            if (!ItemLevelShift::IsShiftUpgradeId(entries[i]))
+            {
+                SendEmptyDbReply(this, entries[i], type, "not an item level shift row");
+                continue;
+            }
+
+            ByteBuffer record;
+            ItemLevelShift::WriteUpgradeRecord(entries[i], record);
+
+            WorldPacket data(SMSG_DB_REPLY);
+            data << uint32(entries[i]);
+            data << uint32(ItemLevelShift::HOTFIX_TIMESTAMP);
+            data << uint32(type);
+            data << uint32(record.size());
+            data.append(record);
+            SendPacket(&data);
+        }
+        return;
     }
 
     if (knownUnsupportedType)

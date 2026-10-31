@@ -8,6 +8,7 @@
 #include "DatabaseEnv.h"
 #include "Item.h"
 #include "ItemEnchantmentMgr.h"
+#include "ItemLevelShift.h"
 #include "ObjectMgr.h"
 #include "Opcodes.h"
 #include "Player.h"
@@ -1675,4 +1676,25 @@ void Item::ItemContainerDeleteLootMoneyAndLootItemsFromDB()
     // Deletes money and items associated with an openable item from the DB
     ItemContainerDeleteLootMoneyFromDB();
     ItemContainerDeleteLootItemsFromDB();
+}
+
+int32 Item::GetItemLevelShift() const
+{
+    return ItemLevelShift::ShiftOf(GetDynamicUInt32Value(ITEM_DYNAMIC_MODIFIERS, ItemLevelShift::MODIFIER_INDEX));
+}
+
+void Item::SetItemLevelShift(int32 shift)
+{
+    shift = std::max(-ItemLevelShift::MAX_SHIFT, std::min(ItemLevelShift::MAX_SHIFT, shift));
+    SetDynamicUInt32Value(ITEM_DYNAMIC_MODIFIERS, ItemLevelShift::MODIFIER_INDEX, ItemLevelShift::UpgradeIdFor(shift));
+    if (shift)
+        SetFlag(ITEM_FIELD_MODIFIERS_MASK, 1 << ItemLevelShift::MODIFIER_INDEX);
+    else
+        RemoveFlag(ITEM_FIELD_MODIFIERS_MASK, 1 << ItemLevelShift::MODIFIER_INDEX);
+    SetState(ITEM_CHANGED, GetOwner());
+}
+
+ItemTemplate const* Item::GetStatTemplate() const
+{
+    return ItemLevelShift::ShiftedTemplate(GetTemplate(), GetItemLevelShift());
 }

@@ -1,0 +1,58 @@
+/*
+* This file is part of Project SkyFire https://www.projectskyfire.org.
+* See LICENSE.md file for Copyright information
+*
+* Per-item item level shift, carried by the item's upgrade modifier
+* (ITEM_DYNAMIC_MODIFIERS index 2) like 5.4's item upgrades. The upgrade ids
+* are synthetic: UPGRADE_ID_BASE + MAX_SHIFT + shift, served to the client as
+* ItemUpgrade.db2 hotfix rows whose item level bonus is the shift, so the
+* client recomputes the tooltip for the shifted item level.
+*
+* Test feature (`.debug itemlevel`): the shift is not saved with the item yet.
+*/
+
+#ifndef SF_ITEM_LEVEL_SHIFT_H
+#define SF_ITEM_LEVEL_SHIFT_H
+
+#include "Define.h"
+
+#include <vector>
+
+class ByteBuffer;
+struct ItemTemplate;
+
+namespace ItemLevelShift
+{
+    constexpr uint32 MODIFIER_INDEX = 2;            // ITEM_DYNAMIC_MODIFIERS: 0 reforge, 1 transmog, 2 upgrade
+    constexpr uint32 UPGRADE_ID_BASE = 900000;
+    constexpr int32 MAX_SHIFT = 1000;
+    // Rows announced to clients at login (hotfix list).
+    constexpr int32 HOTFIX_MIN_SHIFT = -200;
+    constexpr int32 HOTFIX_MAX_SHIFT = 600;
+    constexpr uint32 HOTFIX_TIMESTAMP = 1761955200; // fixed, so clients keep their cached rows
+
+    inline bool IsShiftUpgradeId(uint32 id)
+    {
+        return id >= UPGRADE_ID_BASE && id <= UPGRADE_ID_BASE + 2 * uint32(MAX_SHIFT);
+    }
+
+    inline int32 ShiftOf(uint32 upgradeId)
+    {
+        return IsShiftUpgradeId(upgradeId) ? int32(upgradeId - UPGRADE_ID_BASE) - MAX_SHIFT : 0;
+    }
+
+    inline uint32 UpgradeIdFor(int32 shift)
+    {
+        return shift ? UPGRADE_ID_BASE + uint32(shift + MAX_SHIFT) : 0;
+    }
+
+    // The template with ItemLevel + shift: stats scaled by the item level budget
+    // (RandPropPoints), armor and weapon damage recomputed for the new item level.
+    // Cached; the pointer stays valid for the server's lifetime.
+    ItemTemplate const* ShiftedTemplate(ItemTemplate const* proto, int32 shift);
+
+    // ItemUpgrade.db2 record (ID, path, item level bonus, previous upgrade, currency, cost).
+    void WriteUpgradeRecord(uint32 upgradeId, ByteBuffer& record);
+}
+
+#endif
