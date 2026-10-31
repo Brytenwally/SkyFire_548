@@ -29,7 +29,7 @@ namespace ItemLevelShift
     // Rows announced to clients at login (hotfix list).
     constexpr int32 HOTFIX_MIN_SHIFT = -200;
     constexpr int32 HOTFIX_MAX_SHIFT = 600;
-    constexpr uint32 HOTFIX_TIMESTAMP = 1761955200; // fixed, so clients keep their cached rows
+    constexpr uint32 HOTFIX_TIMESTAMP = 1761980400; // fixed, so clients keep their cached rows; bump when the rows change
 
     inline bool IsShiftUpgradeId(uint32 id)
     {
