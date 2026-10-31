@@ -1756,9 +1756,11 @@ public:
     /***                    QUEST SYSTEM                   ***/
     /*********************************************************/
 
+    // The level the quest plays at for this character (open world scaling lifts it to theirs).
     int32 GetQuestLevel(Quest const* quest) const
     {
-        return quest && (quest->GetQuestLevel() > 0) ? quest->GetQuestLevel() : getLevel();
+        int32 const level = quest ? quest->GetQuestLevelFor(this) : 0;
+        return level > 0 ? level : getLevel();
     }
 
     void PrepareQuestMenu(uint64 guid);
