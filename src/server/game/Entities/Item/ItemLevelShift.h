@@ -8,6 +8,10 @@
 * ItemUpgrade.db2 hotfix rows whose item level bonus is the shift, so the
 * client recomputes the tooltip for the shifted item level.
 *
+* The client shows it only when ITEM_FIELD_MODIFIERS_MASK covers indices 0-2 (mask 7):
+* confirmed in game with Blizzard's row 492 (item level 553 -> 557, "Upgrade Level: 1/4",
+* stats recomputed by the client).
+*
 * Test feature (`.debug itemlevel`): the shift is not saved with the item yet.
 */
 

@@ -1687,10 +1687,20 @@ void Item::SetItemLevelShift(int32 shift)
 {
     shift = std::max(-ItemLevelShift::MAX_SHIFT, std::min(ItemLevelShift::MAX_SHIFT, shift));
     SetDynamicUInt32Value(ITEM_DYNAMIC_MODIFIERS, ItemLevelShift::MODIFIER_INDEX, ItemLevelShift::UpgradeIdFor(shift));
-    if (shift)
-        SetFlag(ITEM_FIELD_MODIFIERS_MASK, 1 << ItemLevelShift::MODIFIER_INDEX);
-    else
-        RemoveFlag(ITEM_FIELD_MODIFIERS_MASK, 1 << ItemLevelShift::MODIFIER_INDEX);
+
+    // The 5.4.8 client reads the modifiers as a prefix: the mask has to cover every index up
+    // to the last one in use (reforge 0, transmog 1, upgrade 2). Upgrade alone (4) is ignored
+    // and bits past the list (255) break the item; 7 shows the upgrade (owner's test).
+    uint32 mask = GetUInt32Value(ITEM_FIELD_MODIFIERS_MASK) & ~7u;
+    for (int32 index = int32(ItemLevelShift::MODIFIER_INDEX); index >= 0; --index)
+    {
+        if (GetDynamicUInt32Value(ITEM_DYNAMIC_MODIFIERS, uint16(index)))
+        {
+            mask |= (1u << (index + 1)) - 1;
+            break;
+        }
+    }
+    SetUInt32Value(ITEM_FIELD_MODIFIERS_MASK, mask);
     SetState(ITEM_CHANGED, GetOwner());
 }
 

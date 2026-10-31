@@ -1530,12 +1530,12 @@ public:
             Item* rawItem = slot < EQUIPMENT_SLOT_END ? player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot) : NULL;
             if (!idArg || !rawItem)
             {
-                handler->SendSysMessage("Usage: .debug itemlevel <equipped slot> raw <upgrade id> [modifier mask bits, default 4]");
+                handler->SendSysMessage("Usage: .debug itemlevel <equipped slot> raw <upgrade id> [modifier mask bits, default 7]");
                 handler->SetSentErrorMessage(true);
                 return false;
             }
             uint32 const upgradeId = uint32(strtoul(idArg, NULL, 10));
-            uint32 const mask = maskArg ? uint32(strtoul(maskArg, NULL, 10)) : 4u;
+            uint32 const mask = maskArg ? uint32(strtoul(maskArg, NULL, 10)) : 7u;
             rawItem->SetDynamicUInt32Value(ITEM_DYNAMIC_MODIFIERS, 2, upgradeId);
             if (upgradeId)
                 rawItem->SetFlag(ITEM_FIELD_MODIFIERS_MASK, mask);
