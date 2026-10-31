@@ -16,7 +16,7 @@
 #include "DBCStores.h"
 #include "Group.h"
 #include "Guild.h"
-#include "ItemLevelShift.h"
+#include "ItemScalingHooks.h"
 #include "GuildMgr.h"
 #include "Language.h"
 #include "LFGMgr.h"
@@ -1635,11 +1635,13 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder* holder)
 
     HotfixData const& hotfix = sObjectMgr->GetHotfixData();
 
-    // Plus the synthetic ItemUpgrade rows item level shifts use (ItemLevelShift.h).
-    uint32 const shiftRows = uint32(ItemLevelShift::HOTFIX_MAX_SHIFT - ItemLevelShift::HOTFIX_MIN_SHIFT + 1) - 1;
+    // Plus ItemUpgrade rows a module adds for per-item scaling (ItemScalingHooks).
+    std::vector<std::pair<uint32, uint32>> upgradeRows;
+    if (ItemScalingHooks::UpgradeHotfixListFn list = ItemScalingHooks::UpgradeHotfixList.load(std::memory_order_relaxed))
+        list(upgradeRows);
 
     data.Initialize(SMSG_HOTFIX_NOTIFY_BLOB);
-    data.WriteBits(hotfix.size() + shiftRows, 20);
+    data.WriteBits(hotfix.size() + upgradeRows.size(), 20);
     data.FlushBits();
 
     for (uint32 i = 0; i < hotfix.size(); ++i)
@@ -1649,12 +1651,10 @@ void WorldSession::HandlePlayerLogin(LoginQueryHolder* holder)
         data << uint32(hotfix[i].Type);
     }
 
-    for (int32 shift = ItemLevelShift::HOTFIX_MIN_SHIFT; shift <= ItemLevelShift::HOTFIX_MAX_SHIFT; ++shift)
+    for (auto const& row : upgradeRows)
     {
-        if (!shift)
-            continue;
-        data << uint32(ItemLevelShift::HOTFIX_TIMESTAMP);
-        data << uint32(ItemLevelShift::UpgradeIdFor(shift));
+        data << uint32(row.second);
+        data << uint32(row.first);
         data << uint32(DB2_REPLY_ITEM_UPGRADE);
     }
 

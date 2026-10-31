@@ -21299,6 +21299,7 @@ void Player::AutoStoreLoot(uint8 bag, uint8 slot, uint32 loot_id, LootStore cons
         }
 
         Item* pItem = StoreNewItem(dest, lootItem->itemid, true, lootItem->randomPropertyId);
+        sScriptMgr->OnPlayerLootItem(this, pItem, lootItem->count);
         SendNewItem(pItem, lootItem->count, false, false, broadcast);
     }
 }
@@ -21333,6 +21334,7 @@ void Player::StoreLootItem(uint8 lootSlot, Loot* loot, uint64 lootGuid)
     {
         AllowedLooterSet looters = item->GetAllowedLooters();
         Item* newitem = StoreNewItem(dest, item->itemid, true, item->randomPropertyId, looters);
+        sScriptMgr->OnPlayerLootItem(this, newitem, item->count);
 
         if (qitem)
         {

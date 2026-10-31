@@ -286,10 +286,12 @@ public:
     void ClearEnchantment(EnchantmentSlot slot);
     uint32 GetEnchantmentId(EnchantmentSlot slot)       const { return GetUInt32Value(ITEM_FIELD_ENCHANTMENT + slot * MAX_ENCHANTMENT_OFFSET + ENCHANTMENT_ID_OFFSET); }
 
-    // Item level shift carried by the upgrade modifier (ItemLevelShift.h). The stat
-    // template is the item's template at its shifted item level.
-    int32 GetItemLevelShift() const;
-    void SetItemLevelShift(int32 shift);
+    // 5.4 item upgrade modifier (ITEM_DYNAMIC_MODIFIERS index 2, an ItemUpgrade.db2 id).
+    // The client shows it only when ITEM_FIELD_MODIFIERS_MASK covers every modifier up to
+    // it, which SetUpgradeId keeps. Not saved by the core: a module that uses it keeps it.
+    uint32 GetUpgradeId() const;
+    void SetUpgradeId(uint32 upgradeId);
+    // Template the item's stats are applied from: a module's (ItemScalingHooks) or its own.
     ItemTemplate const* GetStatTemplate() const;
     uint32 GetEnchantmentDuration(EnchantmentSlot slot) const { return GetUInt32Value(ITEM_FIELD_ENCHANTMENT + slot * MAX_ENCHANTMENT_OFFSET + ENCHANTMENT_DURATION_OFFSET); }
     uint32 GetEnchantmentCharges(EnchantmentSlot slot)  const { return GetUInt32Value(ITEM_FIELD_ENCHANTMENT + slot * MAX_ENCHANTMENT_OFFSET + ENCHANTMENT_CHARGES_OFFSET); }

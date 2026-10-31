@@ -25,7 +25,7 @@
 #include "GuildMgr.h"
 #include "InstanceScript.h"
 #include "Language.h"
-#include "ItemLevelShift.h"
+#include "ItemScalingHooks.h"
 #include "Log.h"
 #include "LootMgr.h"
 #include "MapManager.h"
@@ -2646,29 +2646,25 @@ void WorldSession::HandleRequestHotfix(WorldPacket& recvPacket)
 
     if (type == DB2_REPLY_ITEM_UPGRADE)
     {
-        // Synthetic item level shift rows (ItemLevelShift.h); SkyFire has no ItemUpgrade store.
-        // Blizzard's own rows are left alone (an empty reply would erase them client-side).
-        SF_LOG_INFO("network", "CMSG_REQUEST_HOTFIX: client asked for %u ItemUpgrade row(s), first %u",
-            count, count ? entries[0] : 0);
-        uint32 sent = 0;
-        for (uint32 i = 0; i < count; ++i)
+        // Rows a module adds for per-item scaling (ItemScalingHooks); SkyFire has no
+        // ItemUpgrade store, and Blizzard's own rows are left to the client's copy (an empty
+        // reply would erase them client-side).
+        ItemScalingHooks::UpgradeRowWriterFn writer = ItemScalingHooks::UpgradeRowWriter.load(std::memory_order_relaxed);
+        for (uint32 i = 0; i < count && writer; ++i)
         {
-            if (!ItemLevelShift::IsShiftUpgradeId(entries[i]))
-                continue;
-            ++sent;
-
             ByteBuffer record;
-            ItemLevelShift::WriteUpgradeRecord(entries[i], record);
+            uint32 timestamp = 0;
+            if (!writer(entries[i], record, timestamp))
+                continue;
 
             WorldPacket data(SMSG_DB_REPLY);
             data << uint32(entries[i]);
-            data << uint32(ItemLevelShift::HOTFIX_TIMESTAMP);
+            data << uint32(timestamp);
             data << uint32(type);
             data << uint32(record.size());
             data.append(record);
             SendPacket(&data);
         }
-        SF_LOG_INFO("network", "SMSG_DB_REPLY: sent %u item level shift ItemUpgrade row(s)", sent);
         return;
     }
 

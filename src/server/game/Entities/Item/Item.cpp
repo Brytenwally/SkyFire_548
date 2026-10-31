@@ -8,7 +8,7 @@
 #include "DatabaseEnv.h"
 #include "Item.h"
 #include "ItemEnchantmentMgr.h"
-#include "ItemLevelShift.h"
+#include "ItemScalingHooks.h"
 #include "ObjectMgr.h"
 #include "Opcodes.h"
 #include "Player.h"
@@ -492,6 +492,9 @@ bool Item::LoadFromDB(uint32 guid, uint64 owner_guid, Field* fields, uint32 entr
         stmt->setUInt32(3, guid);
         CharacterDatabase.Execute(stmt);
     }
+
+    if (ItemScalingHooks::ItemLoadedFn loaded = ItemScalingHooks::ItemLoaded.load(std::memory_order_relaxed))
+        loaded(this);
 
     return true;
 }
@@ -1678,21 +1681,20 @@ void Item::ItemContainerDeleteLootMoneyAndLootItemsFromDB()
     ItemContainerDeleteLootItemsFromDB();
 }
 
-int32 Item::GetItemLevelShift() const
+uint32 Item::GetUpgradeId() const
 {
-    return ItemLevelShift::ShiftOf(GetDynamicUInt32Value(ITEM_DYNAMIC_MODIFIERS, ItemLevelShift::MODIFIER_INDEX));
+    return GetDynamicUInt32Value(ITEM_DYNAMIC_MODIFIERS, 2);
 }
 
-void Item::SetItemLevelShift(int32 shift)
+void Item::SetUpgradeId(uint32 upgradeId)
 {
-    shift = std::max(-ItemLevelShift::MAX_SHIFT, std::min(ItemLevelShift::MAX_SHIFT, shift));
-    SetDynamicUInt32Value(ITEM_DYNAMIC_MODIFIERS, ItemLevelShift::MODIFIER_INDEX, ItemLevelShift::UpgradeIdFor(shift));
+    SetDynamicUInt32Value(ITEM_DYNAMIC_MODIFIERS, 2, upgradeId);
 
     // The 5.4.8 client reads the modifiers as a prefix: the mask has to cover every index up
-    // to the last one in use (reforge 0, transmog 1, upgrade 2). Upgrade alone (4) is ignored
-    // and bits past the list (255) break the item; 7 shows the upgrade (owner's test).
+    // to the last one in use (reforge 0, transmog 1, upgrade 2). 4 alone is ignored and bits
+    // past the list break the item; 7 shows the upgrade (tested in game).
     uint32 mask = GetUInt32Value(ITEM_FIELD_MODIFIERS_MASK) & ~7u;
-    for (int32 index = int32(ItemLevelShift::MODIFIER_INDEX); index >= 0; --index)
+    for (int32 index = 2; index >= 0; --index)
     {
         if (GetDynamicUInt32Value(ITEM_DYNAMIC_MODIFIERS, uint16(index)))
         {
@@ -1701,10 +1703,12 @@ void Item::SetItemLevelShift(int32 shift)
         }
     }
     SetUInt32Value(ITEM_FIELD_MODIFIERS_MASK, mask);
-    SetState(ITEM_CHANGED, GetOwner());
 }
 
 ItemTemplate const* Item::GetStatTemplate() const
 {
-    return ItemLevelShift::ShiftedTemplate(GetTemplate(), GetItemLevelShift());
+    if (ItemScalingHooks::StatTemplateFn resolver = ItemScalingHooks::StatTemplate.load(std::memory_order_relaxed))
+        if (ItemTemplate const* proto = resolver(this))
+            return proto;
+    return GetTemplate();
 }
