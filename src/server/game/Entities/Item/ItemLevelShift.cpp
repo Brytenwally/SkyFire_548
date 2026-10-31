@@ -168,8 +168,3 @@ void ItemLevelShift::WriteUpgradeRecord(uint32 upgradeId, ByteBuffer& record)
     record << uint32(0);                            // currency
     record << uint32(0);                            // cost
 }
-
-float ItemLevelShift::StatBudget(ItemTemplate const* proto, uint32 itemLevel)
-{
-    return proto ? Budget(proto, itemLevel) : 0.0f;
-}

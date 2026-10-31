@@ -55,11 +55,6 @@ namespace ItemLevelShift
     // Cached; the pointer stays valid for the server's lifetime.
     ItemTemplate const* ShiftedTemplate(ItemTemplate const* proto, int32 shift);
 
-    // RandPropPoints budget of this item's quality and slot at an item level (the client's
-    // column choice); 0 for poor/common items or slots without a budget. A random suffix's
-    // stats are allocation x suffix factor / 10000, so this is also a full suffix factor.
-    float StatBudget(ItemTemplate const* proto, uint32 itemLevel);
-
     // ItemUpgrade.db2 (5.4.8 build 18273, 46 rows, read from the owner's client data):
     // ID, ItemUpgradePathID, ItemLevelBonus (total, not per step: 446 = +4, 447 = +8),
     // PrevUpgradeID, CurrencyID (396 Valor), CurrencyCost. Paths live in ItemUpgradePath.dbc

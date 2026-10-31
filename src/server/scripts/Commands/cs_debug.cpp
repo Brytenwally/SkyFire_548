@@ -19,7 +19,6 @@ EndScriptData */
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "Group.h"
-#include "ItemLevelShift.h"
 #include "Language.h"
 #include "LFGMgr.h"
 #include "ObjectAccessor.h"
@@ -1548,19 +1547,6 @@ public:
             return true;
         }
 
-        // .debug itemlevel <slot> suffix list | <suffix id> [percent]: random suffix test for
-        // adding secondary stats to an item (Destiny Weaver upgrades). `list` shows suffixes
-        // made only of secondary stats that fit the item (Intellect, Agility or Strength gear;
-        // mastery from level 80). <id> stamps that suffix on the equipped item with a suffix
-        // factor of <percent> (default 100) of the stat budget at its current (shifted) item
-        // level; 0 removes it. Not saved with the item.
-        if (!strcmp(shiftArg, "suffix"))
-        {
-            char* idArg = strtok(NULL, " ");
-            char* percentArg = strtok(NULL, " ");
-            return HandleDebugItemSuffix(handler, player, slot, idArg, percentArg);
-        }
-
         int32 const shift = atoi(shiftArg);
         Item* item = slot < EQUIPMENT_SLOT_END ? player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot) : NULL;
         if (!item)
@@ -1588,129 +1574,6 @@ public:
                 handler->PSendSysMessage("  stat %u: %d -> %d", proto->ItemStat[i].ItemStatType,
                     proto->ItemStat[i].ItemStatValue, shifted->ItemStat[i].ItemStatValue);
         handler->SendSysMessage("Compare the tooltip with these numbers and the character sheet. The shift is lost at logout.");
-        return true;
-    }
-
-    static bool SuffixStatAllowed(uint32 stat, ItemTemplate const* proto, uint8 playerLevel)
-    {
-        bool intellect = false, agility = false, strength = false;
-        for (uint8 i = 0; i < MAX_ITEM_PROTO_STATS; ++i)
-        {
-            uint32 const type = proto->ItemStat[i].ItemStatType;
-            if (!proto->ItemStat[i].ItemStatValue)
-                continue;
-            intellect = intellect || type == ITEM_MOD_INTELLECT;
-            agility = agility || type == ITEM_MOD_AGILITY;
-            strength = strength || type == ITEM_MOD_STRENGTH;
-        }
-        switch (stat)
-        {
-            case ITEM_MOD_CRIT_RATING:
-            case ITEM_MOD_HASTE_RATING:
-            case ITEM_MOD_HIT_RATING:
-                return true;
-            case ITEM_MOD_MASTERY_RATING:
-                return playerLevel >= 80;           // mastery is learned at 80
-            case ITEM_MOD_SPIRIT:
-            case ITEM_MOD_SPELL_POWER:
-                return intellect || (!agility && !strength);
-            case ITEM_MOD_EXPERTISE_RATING:
-                return agility || strength;
-            case ITEM_MOD_DODGE_RATING:
-            case ITEM_MOD_PARRY_RATING:
-                return strength;
-            default:
-                return false;
-        }
-    }
-
-    static bool HandleDebugItemSuffix(ChatHandler* handler, Player* player, uint8 slot, char* idArg, char* percentArg)
-    {
-        Item* item = slot < EQUIPMENT_SLOT_END ? player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot) : NULL;
-        if (!item || !idArg)
-        {
-            handler->SendSysMessage("Usage: .debug itemlevel <equipped slot> suffix list | <suffix id> [percent of the budget]");
-            handler->SetSentErrorMessage(true);
-            return false;
-        }
-        ItemTemplate const* proto = item->GetTemplate();
-
-        if (!strcmp(idArg, "list"))
-        {
-            uint32 shown = 0;
-            for (uint32 id = 1; id < sItemRandomSuffixStore.GetNumRows() && shown < 25; ++id)
-            {
-                ItemRandomSuffixEntry const* suffix = sItemRandomSuffixStore.LookupEntry(id);
-                if (!suffix)
-                    continue;
-                std::string stats;
-                uint32 count = 0;
-                bool ok = true;
-                for (uint8 k = 0; k < 5 && ok; ++k)
-                {
-                    SpellItemEnchantmentEntry const* enchant = sSpellItemEnchantmentStore.LookupEntry(suffix->enchant_id[k]);
-                    if (!enchant || !suffix->prefix[k])
-                        continue;
-                    for (uint8 e = 0; e < MAX_ITEM_ENCHANTMENT_EFFECTS; ++e)
-                    {
-                        if (enchant->type[e] == ITEM_ENCHANTMENT_TYPE_NONE)
-                            continue;
-                        if (enchant->type[e] != ITEM_ENCHANTMENT_TYPE_STAT
-                            || !SuffixStatAllowed(enchant->spellid[e], proto, player->getLevel()))
-                        {
-                            ok = false;
-                            break;
-                        }
-                        ++count;
-                        stats += " stat " + std::to_string(enchant->spellid[e]) + " (" + std::to_string(suffix->prefix[k]) + ")";
-                    }
-                }
-                if (!ok || count != 2)
-                    continue;
-                handler->PSendSysMessage("%u: %s -%s", id, suffix->nameSuffix ? suffix->nameSuffix : "", stats.c_str());
-                ++shown;
-            }
-            handler->PSendSysMessage("%u suffix(es) with two fitting secondary stats (stat ids: 31 hit, 32 crit, "
-                "36 haste, 37 expertise, 49 mastery, 6 spirit, 45 spell power, 13 dodge, 14 parry).", shown);
-            return true;
-        }
-
-        uint32 const suffixId = uint32(strtoul(idArg, NULL, 10));
-        float const percent = percentArg ? float(atof(percentArg)) : 100.0f;
-        ItemRandomSuffixEntry const* suffix = suffixId ? sItemRandomSuffixStore.LookupEntry(suffixId) : NULL;
-        if (suffixId && !suffix)
-        {
-            handler->PSendSysMessage("No random suffix %u.", suffixId);
-            handler->SetSentErrorMessage(true);
-            return false;
-        }
-
-        uint32 const itemLevel = item->GetStatTemplate()->ItemLevel;
-        uint32 const factor = suffix ? uint32(ItemLevelShift::StatBudget(proto, itemLevel) * percent / 100.0f) : 0;
-
-        bool const applied = !item->IsBroken();
-        if (applied)
-            player->_ApplyItemMods(item, slot, false);
-        item->SetInt32Value(ITEM_FIELD_RANDOM_PROPERTIES_ID, suffix ? -int32(suffixId) : 0);
-        item->SetUInt32Value(ITEM_FIELD_PROPERTY_SEED, factor);
-        for (uint32 i = PROP_ENCHANTMENT_SLOT_0; i <= PROP_ENCHANTMENT_SLOT_4; ++i)
-            item->SetEnchantment(EnchantmentSlot(i), suffix ? suffix->enchant_id[i - PROP_ENCHANTMENT_SLOT_0] : 0, 0, 0);
-        item->SetState(ITEM_CHANGED, player);
-        if (applied)
-            player->_ApplyItemMods(item, slot, true);
-
-        if (!suffix)
-        {
-            handler->PSendSysMessage("%s: suffix removed.", proto->Name1.c_str());
-            return true;
-        }
-        handler->PSendSysMessage("%s: suffix %u '%s', suffix factor %u (%.0f%% of the item level %u budget).",
-            proto->Name1.c_str(), suffixId, suffix->nameSuffix ? suffix->nameSuffix : "", factor, percent, itemLevel);
-        for (uint8 k = 0; k < 5; ++k)
-            if (suffix->enchant_id[k] && suffix->prefix[k])
-                handler->PSendSysMessage("  enchant %u: %u x %u / 10000 = %u", suffix->enchant_id[k], suffix->prefix[k],
-                    factor, suffix->prefix[k] * factor / 10000);
-        handler->SendSysMessage("Compare the tooltip (stats and name) with these numbers. Not saved with the item.");
         return true;
     }
 
