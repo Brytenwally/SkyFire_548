@@ -118,7 +118,7 @@ ItemTemplate const* ItemLevelShift::ShiftedTemplate(ItemTemplate const* proto, i
 void ItemLevelShift::WriteUpgradeRecord(uint32 upgradeId, ByteBuffer& record)
 {
     record << uint32(upgradeId);
-    record << uint32(0);                            // ItemUpgradePath: none
+    record << uint32(UPGRADE_PATH);                 // an existing ItemUpgradePath
     record << int32(ShiftOf(upgradeId));            // item level bonus
     record << uint32(0);                            // previous upgrade
     record << uint32(0);                            // currency

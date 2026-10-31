@@ -51,7 +51,12 @@ namespace ItemLevelShift
     // Cached; the pointer stays valid for the server's lifetime.
     ItemTemplate const* ShiftedTemplate(ItemTemplate const* proto, int32 shift);
 
-    // ItemUpgrade.db2 record (ID, path, item level bonus, previous upgrade, currency, cost).
+    // ItemUpgrade.db2 (5.4.8 build 18273, 46 rows, read from the owner's client data):
+    // ID, ItemUpgradePathID, ItemLevelBonus (total, not per step: 446 = +4, 447 = +8),
+    // PrevUpgradeID, CurrencyID (396 Valor), CurrencyCost. Paths live in ItemUpgradePath.dbc
+    // (1, 89-91, 108, 110-113, 116-119, 124, 125), a DBC the server cannot hotfix, so the
+    // synthetic rows reuse a real one.
+    constexpr uint32 UPGRADE_PATH = 124;            // the 5.4 path (Siege of Orgrimmar items start at 491)
     void WriteUpgradeRecord(uint32 upgradeId, ByteBuffer& record);
 }
 
