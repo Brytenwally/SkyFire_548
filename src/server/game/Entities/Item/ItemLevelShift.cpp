@@ -20,51 +20,88 @@ void FillItemDamageFields(float* minDamage, float* maxDamage, float* dps, uint32
 
 namespace
 {
-    // RandPropPoints column for a slot, as GenerateEnchSuffixFactor picks it; -1 = no budget.
-    int32 BudgetColumn(uint32 inventoryType)
+    // RandPropPoints column for a slot, as the 5.4.8 client picks it (bows and guns are
+    // two-handers here, wands one-handers); -1 = no budget.
+    int32 BudgetColumn(ItemTemplate const* proto)
     {
-        switch (inventoryType)
+        switch (proto->InventoryType)
         {
             case INVTYPE_HEAD: case INVTYPE_BODY: case INVTYPE_CHEST: case INVTYPE_LEGS:
-            case INVTYPE_2HWEAPON: case INVTYPE_ROBE:
+            case INVTYPE_RANGED: case INVTYPE_2HWEAPON: case INVTYPE_ROBE: case INVTYPE_THROWN:
                 return 0;
+            case INVTYPE_RANGEDRIGHT:
+                return proto->SubClass == ITEM_SUBCLASS_WEAPON_WAND ? 3 : 0;
+            case INVTYPE_WEAPON: case INVTYPE_WEAPONMAINHAND: case INVTYPE_WEAPONOFFHAND:
+                return 3;
             case INVTYPE_SHOULDERS: case INVTYPE_WAIST: case INVTYPE_FEET: case INVTYPE_HANDS:
             case INVTYPE_TRINKET:
                 return 1;
             case INVTYPE_NECK: case INVTYPE_WRISTS: case INVTYPE_FINGER: case INVTYPE_SHIELD:
             case INVTYPE_CLOAK: case INVTYPE_HOLDABLE:
                 return 2;
-            case INVTYPE_WEAPON: case INVTYPE_WEAPONMAINHAND: case INVTYPE_WEAPONOFFHAND:
-                return 3;
-            case INVTYPE_RANGED: case INVTYPE_THROWN: case INVTYPE_RANGEDRIGHT:
+            case INVTYPE_RELIC:
                 return 4;
             default:
                 return -1;
         }
     }
 
-    // Stat budget of an item of this quality and slot at this item level.
-    uint32 Budget(ItemTemplate const* proto, uint32 itemLevel)
+    // Stat budget of an item of this quality and slot at this item level; 0 for poor and
+    // common items, which the client does not scale either.
+    float Budget(ItemTemplate const* proto, uint32 itemLevel)
     {
-        int32 const column = BudgetColumn(proto->InventoryType);
+        int32 const column = BudgetColumn(proto);
         RandomPropertiesPointsEntry const* points = sRandomPropertiesPointsStore.LookupEntry(itemLevel);
         if (column < 0 || !points)
-            return 0;
+            return 0.0f;
         switch (proto->Quality)
         {
             case ITEM_QUALITY_UNCOMMON:
-                return points->UncommonPropertiesPoints[column];
+                return float(points->UncommonPropertiesPoints[column]);
             case ITEM_QUALITY_RARE:
             case ITEM_QUALITY_HEIRLOOM:
-                return points->RarePropertiesPoints[column];
+                return float(points->RarePropertiesPoints[column]);
             case ITEM_QUALITY_EPIC:
             case ITEM_QUALITY_LEGENDARY:
             case ITEM_QUALITY_ARTIFACT:
-                return points->EpicPropertiesPoints[column];
+                return float(points->EpicPropertiesPoints[column]);
             default:
-                // Poor and common items have no column; uncommon follows the same curve.
-                return points->UncommonPropertiesPoints[column];
+                return 0.0f;
         }
+    }
+
+    float SocketCost(uint32 itemLevel)
+    {
+        GtItemSocketCostPerLevelEntry const* entry = itemLevel ? sGtItemSocketCostPerLevelStore.LookupEntry(itemLevel - 1) : nullptr;
+        return entry ? entry->cost : 0.0f;
+    }
+
+    // One stat at another item level, the way the 5.4.8 client computes it for upgraded
+    // items: budget * allocation / 10000, minus int(socket cost multiplier * socket cost),
+    // rounded. The database keeps the multiplier rounded to a whole number (1.5 is stored as
+    // 2), so it is recovered from the item's own value at its base item level, to a quarter.
+    // Verified against the owner's tooltips (Robes of the Tendered Heart at 503/553/603,
+    // Corsair's Overshirt at 20/70). Returns false when the item has no allocation data.
+    bool ClientStatValue(ItemTemplate const* proto, uint8 index, uint32 itemLevel, int32& value)
+    {
+        _ItemStat const& stat = proto->ItemStat[index];
+        float const baseBudget = Budget(proto, proto->ItemLevel);
+        float const newBudget = Budget(proto, itemLevel);
+        if (stat.ItemStatUnk1 <= 0 || baseBudget <= 0.0f || newBudget <= 0.0f)
+            return false;
+
+        float multiplier = 0.0f;
+        if (stat.ItemStatUnk2)
+            if (float const baseCost = SocketCost(proto->ItemLevel); baseCost > 0.0f)
+            {
+                float const deducted = baseBudget * float(stat.ItemStatUnk1) * 0.0001f - float(stat.ItemStatValue);
+                multiplier = std::max(0.0f, std::round(deducted / baseCost * 4.0f) / 4.0f);
+            }
+
+        float result = newBudget * float(stat.ItemStatUnk1) * 0.0001f;
+        result -= float(int32(multiplier * SocketCost(itemLevel)));
+        value = int32(std::floor(result + 0.5f));
+        return true;
     }
 
     std::mutex g_lock;
@@ -86,14 +123,21 @@ ItemTemplate const* ItemLevelShift::ShiftedTemplate(ItemTemplate const* proto, i
     int32 const level = std::max<int32>(1, int32(proto->ItemLevel) + shift);
     shifted->ItemLevel = uint32(level);
 
-    // Stats follow the item level budget, keeping the item's own stat mix.
-    uint32 const oldBudget = Budget(proto, proto->ItemLevel);
-    uint32 const newBudget = Budget(proto, shifted->ItemLevel);
-    double const factor = oldBudget && newBudget ? double(newBudget) / double(oldBudget)
+    // Stats as the client computes them for the shifted item (budget share and socket cost);
+    // items without allocation data scale by the budget ratio instead.
+    float const oldBudget = Budget(proto, proto->ItemLevel);
+    float const newBudget = Budget(proto, shifted->ItemLevel);
+    double const factor = oldBudget > 0.0f && newBudget > 0.0f ? double(newBudget) / double(oldBudget)
         : double(shifted->ItemLevel) / double(std::max<uint32>(proto->ItemLevel, 1));
     for (uint8 i = 0; i < MAX_ITEM_PROTO_STATS; ++i)
-        if (shifted->ItemStat[i].ItemStatValue)
-            shifted->ItemStat[i].ItemStatValue = int32(std::lround(double(proto->ItemStat[i].ItemStatValue) * factor));
+    {
+        if (!proto->ItemStat[i].ItemStatValue)
+            continue;
+        int32 value = 0;
+        if (!ClientStatValue(proto, i, shifted->ItemLevel, value))
+            value = int32(std::lround(double(proto->ItemStat[i].ItemStatValue) * factor));
+        shifted->ItemStat[i].ItemStatValue = value;
+    }
 
     // Armor comes from ItemTemplate::GetArmor() at the new item level; weapon damage
     // from the damage tables, as at load.
